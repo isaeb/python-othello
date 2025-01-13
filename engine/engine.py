@@ -2,22 +2,62 @@ from time import time
 from othello.board import Board
 from typing import Literal
 from concurrent.futures import ThreadPoolExecutor
-from engine.settings import WEIGHTS
+from engine.settings import WEIGHTS, HEATMAP
 
 import threading
 
 
 transposition_lock = threading.Lock()
 
+def find_noisy_moves_bitboard(black_bitboard, white_bitboard, color):
+    threshold = 9
+    legal_moves = find_legal_moves_bitboard(black_bitboard, white_bitboard, color)
+    noisy_moves = 0
+    for position in range(64):
+            bit = 1 << position # Isolate the bit for this position
+            
+            # Check if the move is legal and meets the threshold
+            if legal_moves & bit and HEATMAP[position] > threshold:
+                noisy_moves |= bit  # Add the move to the result bitboard
+
+    return noisy_moves
+
+def quiescence_search(black_bitboard, white_bitboard, alpha, beta, color):
+    # Stand-pat score: evaluate the current position without any moves
+    stand_pat = eval_bitboard(black_bitboard, white_bitboard)
+    if stand_pat >= beta:
+        return beta
+    if stand_pat > alpha:
+        alpha = stand_pat
+
+    # Generate only "noisy" moves (e.g., high-value flips)
+    noisy_moves = find_noisy_moves_bitboard(black_bitboard, white_bitboard, color)
+    while noisy_moves:
+        move = noisy_moves & -noisy_moves
+        noisy_moves &= noisy_moves - 1
+        new_black_bitboard, new_white_bitboard = make_move_bitboard(black_bitboard, white_bitboard, color, move)
+        
+        score = -quiescence_search(new_white_bitboard, new_black_bitboard, -beta, -alpha, opponent_color(color))
+        if score >= beta:
+            return beta
+        if score > alpha:
+            alpha = score
+
+    return alpha
+
 def ai_move_iterative(board, color, max_depth, time_limit=5.0):
     best_move = None
+    best_depth = 0
     if time_limit is not None:
         time_limit += time()
     for depth in range(1, max_depth + 1):
-        best_move = ai_move(board, color, depth, {}, time_limit)
+        new_move = ai_move(board, color, depth, {}, time_limit)
+        if new_move[0] is not None:
+            best_move = new_move
+            best_depth = depth
         if time_limit is not None and time() > time_limit:
             break
-    return best_move
+    return best_move, best_depth
 
 def ai_move(board: Board, color, depth=3, transposition_table={}, time_limit=None):
     best_score = float('-inf')
@@ -62,7 +102,7 @@ def minimax_ab_bitboard_tt(black_bitboard, white_bitboard, depth, alpha, beta, m
         return get_from_tt(board_hash, transposition_table)
     
     if depth == 0 or game_over(black_bitboard, white_bitboard) or (time_limit is not None and time() > time_limit):
-        return eval_bitboard(black_bitboard, white_bitboard)
+        return quiescence_search(black_bitboard, white_bitboard, alpha, beta, color)
     
     legal_moves = find_legal_moves_bitboard(black_bitboard, white_bitboard, color)
     if maximizing_player:
@@ -153,19 +193,19 @@ def find_legal_moves_bitboard(black_bitboard, white_bitboard, color):
             # Check boundaries for left-right moves and row wrapping
             jumping = False
             while 0 <= pos < 64:
-                if direction == -1 and pos % 8 == 7:  # If we're at the rightmost column
+                if direction == -1 and pos % 8 == 0:  # If we're at the leftmost column
                     break
-                if direction == 1 and pos % 8 == 0:   # If we're at the leftmost column
-                    break
-
-                if direction == -7 and pos % 8 == 0:
-                    break
-                if direction == 7 and pos % 8 == 7:
+                if direction == 1 and pos % 8 == 7:   # If we're at the rightmost column
                     break
 
-                if direction == -9 and pos % 8 == 7:
+                if direction == -7 and pos % 8 == 7:
                     break
-                if direction == 9 and pos % 8 == 0:
+                if direction == 7 and pos % 8 == 0:
+                    break
+
+                if direction == -9 and pos % 8 == 0:
+                    break
+                if direction == 9 and pos % 8 == 7:
                     break
 
                 # If we encounter the opponent's piece, continue checking
@@ -327,16 +367,7 @@ def eval_bitboard(black_bitboard:int, white_bitboard:int):
     return evaluation
 
 def get_weights(bitmap:int):
-    HEATMAP = [
-        120, -20,  20,  10,  10,  20, -20, 120,
-        -20, -40,  -5,  -5,  -5,  -5, -40, -20,
-        20,  -5,  15,   3,   3,  15,  -5,  20,
-        10,  -5,   3,   3,   3,   3,  -5,  10,
-        10,  -5,   3,   3,   3,   3,  -5,  10,
-        20,  -5,  15,   3,   3,  15,  -5,  20,
-        -20, -40,  -5,  -5,  -5,  -5, -40, -20,
-        120, -20,  20,  10,  10,  20, -20, 120,
-    ]
+    
     score = 0
     while bitmap:
         square = (bitmap & - bitmap).bit_length() - 1
@@ -361,13 +392,14 @@ def move_to_notation(move:int):
     """
     if move == 0:
         return "Pass"  # If no move is made
-
-    index = move.bit_length() - 1  # Get the index of the single '1' bit
-    row = index // 8               # Calculate 0-indexed row
-    col = index % 8                # Calculate 0-indexed column
-
-    # Convert to Othello notation
-    return f"{chr(col + ord('A'))}{row + 1}"
+    try:
+        index = move.bit_length() - 1  # Get the index of the single '1' bit
+        row = index // 8               # Calculate 0-indexed row
+        col = index % 8                # Calculate 0-indexed column
+        # Convert to Othello notation
+        return f"{chr(col + ord('A'))}{row + 1}"
+    except:
+        return
 
 def create_unstable_bitmap(black_bitmap, white_bitmap, color:Literal['b', 'w'], legal_moves) -> int:
     unstable_bitmap = (1 << 64) - 1

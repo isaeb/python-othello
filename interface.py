@@ -1,5 +1,8 @@
 import os
 import json
+import traceback
+import logging
+
 from time import time
 
 from othello.game import Game
@@ -9,6 +12,9 @@ from options import options
 from settings_info import settings
 
 from engine.engine import *
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 class Runner:
@@ -75,13 +81,13 @@ class Runner:
             print('Game over. Use \'new-game\' to start a new game.')
             return
         
-        depth = int(kwargs.get('depth', 6))
-        time_limit = float(kwargs.get('time', 999))
+        depth = int(kwargs.get('depth', 10))
+        time_limit = float(kwargs.get('time', 5.0))
         start_time = time()
-        result = ai_move_iterative(self.game.board, self.game.color, depth, time_limit)
+        result, max_depth = ai_move_iterative(self.game.board, self.game.color, depth, time_limit)
         execution_time = time() - start_time
 
-        print(f'The computer on depth={depth} recommends {result[0]} [{str(result[1])[:5]}]\nExecution time: {execution_time}')
+        print(f'The computer on depth:{max_depth} recommends {result[0]}\nEvaluation: {str(result[1])[:5]}\nExecution time: {str(execution_time)[:3]} seconds')
 
     def auto_display(self):
         if self.settings.get('auto_display_board'):
@@ -225,5 +231,5 @@ while True:
     try:
         func(**kwargs)
     except Exception as e:
-        print(e)
+        logger.debug(traceback.format_exc())
     

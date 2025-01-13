@@ -13,7 +13,7 @@ options = {
         'arguments': [
             {
                 'label': '--pgn',
-                'usage': 'Initialize a game with a pgn.'
+                'usage': 'Initialize a game from a pgn file.'
             },
             {
                 'label': '--fen',
