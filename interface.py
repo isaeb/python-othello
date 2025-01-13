@@ -199,6 +199,11 @@ while True:
     key = command[0]
     args = command[1:]
 
+    if ('-debug' in args):
+        debug = True
+    else:
+        debug = False
+
     try:
         if key == 'help':
             print_help()
@@ -231,5 +236,6 @@ while True:
     try:
         func(**kwargs)
     except Exception as e:
-        logger.debug(traceback.format_exc())
+        if debug:
+            logger.debug(traceback.format_exc())
     

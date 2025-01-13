@@ -67,6 +67,7 @@ def ai_move(board: Board, color, depth=3, transposition_table={}, time_limit=Non
 
     # Function to evaluate a single move
     def evaluate_move(move):
+        print(move_to_notation(move))
         new_black_bitboard, new_white_bitboard = make_move_bitboard(black_bitboard, white_bitboard, color, move)
         score = minimax_ab_bitboard_tt(
             new_black_bitboard, new_white_bitboard,
@@ -193,19 +194,19 @@ def find_legal_moves_bitboard(black_bitboard, white_bitboard, color):
             # Check boundaries for left-right moves and row wrapping
             jumping = False
             while 0 <= pos < 64:
-                if direction == -1 and pos % 8 == 0:  # If we're at the leftmost column
+                if direction == -1 and pos % 8 == 7:  # weve wrapped to the right side
                     break
-                if direction == 1 and pos % 8 == 7:   # If we're at the rightmost column
-                    break
-
-                if direction == -7 and pos % 8 == 7:
-                    break
-                if direction == 7 and pos % 8 == 0:
+                if direction == 1 and pos % 8 == 0:   # weve wrapped to the left side
                     break
 
-                if direction == -9 and pos % 8 == 0:
+                if direction == -7 and pos % 8 == 0:
                     break
-                if direction == 9 and pos % 8 == 7:
+                if direction == 7 and pos % 8 == 7:
+                    break
+
+                if direction == -9 and pos % 8 == 7:
+                    break
+                if direction == 9 and pos % 8 == 0:
                     break
 
                 # If we encounter the opponent's piece, continue checking
